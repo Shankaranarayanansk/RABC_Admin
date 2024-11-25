@@ -1,37 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useApi } from '../hooks/useApi';
+import { rolesAPI } from '../services/api';
+import LoadingSpinner from './LoadingSpinner';
+import ErrorMessage from './ErrorMessage';
 
-// Mock initial roles data
-const initialRoles = [
-  {
-    id: 1,
-    name: 'Admin',
-    description: 'Full system access',
-    permissions: ['create_user', 'edit_user', 'delete_user', 'manage_roles']
-  },
-  {
-    id: 2,
-    name: 'Editor',
-    description: 'Can edit content',
-    permissions: ['edit_user']
-  },
-  {
-    id: 3,
-    name: 'Viewer',
-    description: 'Read-only access',
-    permissions: []
-  }
-];
-
-const availablePermissions = [
-  { id: 'create_user', label: 'Create User' },
-  { id: 'edit_user', label: 'Edit User' },
-  { id: 'delete_user', label: 'Delete User' },
-  { id: 'manage_roles', label: 'Manage Roles' }
+const defaultPermissions = [
+  { id: 'create_user', label: 'Create User', category: 'User Management' },
+  { id: 'edit_user', label: 'Edit User', category: 'User Management' },
+  { id: 'delete_user', label: 'Delete User', category: 'User Management' },
+  { id: 'view_users', label: 'View Users', category: 'User Management' },
+  { id: 'manage_roles', label: 'Manage Roles', category: 'Role Management' },
+  { id: 'assign_roles', label: 'Assign Roles', category: 'Role Management' },
+  { id: 'view_roles', label: 'View Roles', category: 'Role Management' },
+  { id: 'manage_permissions', label: 'Manage Permissions', category: 'Permission Management' }
 ];
 
 const RoleManagement = () => {
-  const [roles, setRoles] = useState(initialRoles);
+  const { execute, loading, error } = useApi();
+  const [roles, setRoles] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
   const [formData, setFormData] = useState({
@@ -40,28 +27,55 @@ const RoleManagement = () => {
     permissions: []
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (editingRole) {
-      setRoles(roles.map(role =>
-        role.id === editingRole.id ? { ...formData, id: role.id } : role
-      ));
-    } else {
-      setRoles([...roles, { ...formData, id: roles.length + 1 }]);
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
+  const loadRoles = async () => {
+    try {
+      const data = await execute(rolesAPI.getRoles);
+      setRoles(data);
+    } catch (err) {
+      console.error('Failed to load roles:', err);
     }
-    setShowModal(false);
-    setEditingRole(null);
-    setFormData({ name: '', description: '', permissions: [] });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingRole) {
+        await execute(rolesAPI.updateRole, editingRole.id, formData);
+      } else {
+        await execute(rolesAPI.createRole, formData);
+      }
+      await loadRoles();
+      setShowModal(false);
+      setEditingRole(null);
+      setFormData({ name: '', description: '', permissions: [] });
+    } catch (err) {
+      console.error('Failed to save role:', err);
+    }
   };
 
   const handleEdit = (role) => {
     setEditingRole(role);
-    setFormData(role);
+    setFormData({
+      name: role.name,
+      description: role.description,
+      permissions: role.permissions || []
+    });
     setShowModal(true);
   };
 
-  const handleDelete = (roleId) => {
-    setRoles(roles.filter(role => role.id !== roleId));
+  const handleDelete = async (roleId) => {
+    if (window.confirm('Are you sure you want to delete this role? This action cannot be undone.')) {
+      try {
+        await execute(rolesAPI.deleteRole, roleId);
+        await loadRoles();
+      } catch (err) {
+        console.error('Failed to delete role:', err);
+      }
+    }
   };
 
   const handlePermissionToggle = (permissionId) => {
@@ -72,6 +86,18 @@ const RoleManagement = () => {
         : [...prev.permissions, permissionId]
     }));
   };
+
+  // Group permissions by category
+  const groupedPermissions = defaultPermissions.reduce((acc, permission) => {
+    if (!acc[permission.category]) {
+      acc[permission.category] = [];
+    }
+    acc[permission.category].push(permission);
+    return acc;
+  }, {});
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
 
   return (
     <div className="space-y-6">
@@ -86,25 +112,24 @@ const RoleManagement = () => {
         </button>
       </div>
 
-      {/* Roles Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {roles.map((role) => (
-          <div key={role.id} className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div key={role.id} className="bg-white rounded-lg shadow-md p-6 space-y-4">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-lg font-medium text-gray-900">{role.name}</h3>
-                <p className="text-sm text-gray-500">{role.description}</p>
+                <h3 className="text-lg font-semibold text-gray-900">{role.name}</h3>
+                <p className="text-sm text-gray-500 mt-1">{role.description}</p>
               </div>
               <div className="flex space-x-2">
                 <button
                   onClick={() => handleEdit(role)}
-                  className="text-indigo-600 hover:text-indigo-900"
+                  className="p-1 text-indigo-600 hover:text-indigo-900 transition-colors"
                 >
                   <Pencil size={18} />
                 </button>
                 <button
                   onClick={() => handleDelete(role.id)}
-                  className="text-red-600 hover:text-red-900"
+                  className="p-1 text-red-600 hover:text-red-900 transition-colors"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -113,15 +138,18 @@ const RoleManagement = () => {
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-2">Permissions:</h4>
               <div className="flex flex-wrap gap-2">
-                {role.permissions.map((permission) => (
-                  <span
-                    key={permission}
-                    className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full"
-                  >
-                    {availablePermissions.find(p => p.id === permission)?.label || permission}
-                  </span>
-                ))}
-                {role.permissions.length === 0 && (
+                {role.permissions?.map((permissionId) => {
+                  const permission = defaultPermissions.find(p => p.id === permissionId);
+                  return permission ? (
+                    <span
+                      key={permissionId}
+                      className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full"
+                    >
+                      {permission.label}
+                    </span>
+                  ) : null;
+                })}
+                {!role.permissions?.length && (
                   <span className="text-sm text-gray-500">No permissions assigned</span>
                 )}
               </div>
@@ -130,12 +158,13 @@ const RoleManagement = () => {
         ))}
       </div>
 
-      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-6 border w-full max-w-md shadow-lg rounded-md bg-white">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium">{editingRole ? 'Edit Role' : 'Add New Role'}</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                {editingRole ? 'Edit Role' : 'Add New Role'}
+              </h3>
               <button
                 onClick={() => {
                   setShowModal(false);
@@ -147,7 +176,7 @@ const RoleManagement = () => {
                 <Trash2 size={20} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Role Name</label>
                 <input
@@ -167,23 +196,28 @@ const RoleManagement = () => {
                   rows="3"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
-                <div className="space-y-2">
-                  {availablePermissions.map((permission) => (
-                    <label key={permission.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.permissions.includes(permission.id)}
-                        onChange={() => handlePermissionToggle(permission.id)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span className="text-sm text-gray-700">{permission.label}</span>
-                    </label>
-                  ))}
-                </div>
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700">Permissions</label>
+                {Object.entries(groupedPermissions).map(([category, permissions]) => (
+                  <div key={category} className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-600">{category}</h4>
+                    <div className="space-y-2">
+                      {permissions.map((permission) => (
+                        <label key={permission.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={formData.permissions.includes(permission.id)}
+                            onChange={() => handlePermissionToggle(permission.id)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-gray-700">{permission.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-end space-x-3 mt-4">
+              <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -191,7 +225,7 @@ const RoleManagement = () => {
                     setEditingRole(null);
                     setFormData({ name: '', description: '', permissions: [] });
                   }}
-                  className="px-4 py-2 border rounded-md hover:bg-gray-100 transition-colors"
+                  className="px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -199,7 +233,7 @@ const RoleManagement = () => {
                   type="submit"
                   className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
                 >
-                  {editingRole ? 'Update' : 'Create'}
+                  {editingRole ? 'Update Role' : 'Create Role'}
                 </button>
               </div>
             </form>

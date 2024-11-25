@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
-// Mock initial permissions data
 const initialPermissions = [
   {
     id: 'create_user',

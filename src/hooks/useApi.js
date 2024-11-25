@@ -11,7 +11,7 @@ export const useApi = () => {
       const response = await apiFunc(...args);
       return response.data;
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'An error occurred');
       throw err;
     } finally {
       setLoading(false);

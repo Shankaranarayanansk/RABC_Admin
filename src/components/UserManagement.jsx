@@ -20,27 +20,21 @@ const UserManagement = () => {
   });
 
   useEffect(() => {
-    loadUsers();
-    loadRoles();
-  }, []);
+    const initializeData = async () => {
+      try {
+        const [usersData, rolesData] = await Promise.all([
+          execute(usersAPI.getUsers),
+          execute(rolesAPI.getRoles)
+        ]);
+        setUsers(usersData);
+        setRoles(rolesData);
+      } catch (err) {
+        console.error('Failed to initialize data:', err);
+      }
+    };
 
-  const loadUsers = async () => {
-    try {
-      const data = await execute(usersAPI.getUsers);
-      setUsers(data);
-    } catch (err) {
-      console.error('Failed to load users:', err);
-    }
-  };
-
-  const loadRoles = async () => {
-    try {
-      const data = await execute(rolesAPI.getRoles);
-      setRoles(data);
-    } catch (err) {
-      console.error('Failed to load roles:', err);
-    }
-  };
+    initializeData();
+  }, [execute]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,7 +44,8 @@ const UserManagement = () => {
       } else {
         await execute(usersAPI.createUser, formData);
       }
-      await loadUsers();
+      const updatedUsers = await execute(usersAPI.getUsers);
+      setUsers(updatedUsers);
       setShowModal(false);
       setEditingUser(null);
       setFormData({ name: '', email: '', role: '', status: 'active' });
@@ -74,7 +69,8 @@ const UserManagement = () => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
         await execute(usersAPI.deleteUser, userId);
-        await loadUsers();
+        const updatedUsers = await execute(usersAPI.getUsers);
+        setUsers(updatedUsers);
       } catch (err) {
         console.error('Failed to delete user:', err);
       }
@@ -82,8 +78,8 @@ const UserManagement = () => {
   };
 
   const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -133,7 +129,7 @@ const UserManagement = () => {
                     <div className="flex-shrink-0 h-10 w-10">
                       <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
                         <span className="text-indigo-600 font-medium text-lg">
-                          {user.name.charAt(0).toUpperCase()}
+                          {user.name?.charAt(0).toUpperCase()}
                         </span>
                       </div>
                     </div>
@@ -145,7 +141,7 @@ const UserManagement = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">
-                    {user.role}
+                    {user.role || 'No Role'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
